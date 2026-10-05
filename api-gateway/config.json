@@ -1,0 +1,10 @@
+{
+    "port": 8080,
+    "host": "localhost",
+    "services": {
+        "auth": {
+            "host": "localhost",
+            "port": 8081
+        }
+    }
+}
