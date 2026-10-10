@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"syscall"
 	"time"
 
@@ -18,10 +21,16 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	logger, logFile, err := logging.New("logs/all.log")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logging: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer func() {
 		if err := logFile.Close(); err != nil {
@@ -41,7 +50,7 @@ func main() {
 	cfg, err := config.LoadConfig("config.json")
 	if err != nil {
 		logger.WithError(err).Error("failed to load config")
-		os.Exit(1)
+		return err
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
@@ -56,13 +65,13 @@ func main() {
 
 	if err != nil {
 		logger.WithError(err).Error("failed to register handlers")
-		os.Exit(1)
+		return err
 	}
 
 	limitedHandler, err := ratelimit.New(cfg.RateLimit, rootMux)
 	if err != nil {
 		logger.WithError(err).Error("invalid rate limit configuration")
-		os.Exit(1)
+		return err
 	}
 
 	handlerWithCors := logging.Requests(logger, c.Handler(limitedHandler))
@@ -76,18 +85,24 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.WithError(err).Error("failed to start gateway server")
+		return err
+	}
+	serveErr := make(chan error, 1)
 	go func() {
-		logger.WithField("address", addr).Info("gateway starting")
-
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.WithError(err).Error("gateway server failed")
-			os.Exit(1)
-		}
+		serveErr <- server.Serve(listener)
 	}()
+	logger.WithField("address", listener.Addr().String()).Info("gateway starting")
 
-	if err := shutdown.Graceful(logger, []os.Signal{syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM}, server); err != nil {
-		logger.WithError(err).Error("shutdown failed")
-		os.Exit(1)
+	if err := shutdown.Graceful(ctx, logger, server, serveErr, 15*time.Second); err != nil {
+		logger.WithError(err).Error("gateway server stopped")
+		return err
 	}
 	logger.Info("server exiting")
+	return nil
 }
