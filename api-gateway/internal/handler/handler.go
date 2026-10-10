@@ -11,12 +11,26 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/topinambur02/apigateway/internal/config"
+	"github.com/topinambur02/apigateway/internal/logging"
+	"github.com/topinambur02/apigateway/internal/observability"
 )
 
 func NewHandler(cfg config.Config, transport http.RoundTripper) (http.Handler, error) {
+	return newHandler(cfg, transport, nil)
+}
+
+func NewHandlerWithMetrics(cfg config.Config, transport http.RoundTripper, metrics *observability.Metrics) (http.Handler, error) {
+	return newHandler(cfg, transport, metrics)
+}
+
+func newHandler(cfg config.Config, transport http.RoundTripper, metrics *observability.Metrics) (http.Handler, error) {
 	routes := make(map[string]http.Handler, len(cfg.Services))
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
 
 	for name, service := range cfg.Services {
 		if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/%") {
@@ -33,10 +47,14 @@ func NewHandler(cfg config.Config, transport http.RoundTripper) (http.Handler, e
 		}
 
 		proxy := &httputil.ReverseProxy{
-			Transport: transport,
+			Transport: &observedTransport{service: name, next: transport, metrics: metrics},
 			Rewrite: func(request *httputil.ProxyRequest) {
 				request.SetURL(target)
 				request.SetXForwarded()
+				request.Out.Header.Del("X-Request-ID")
+				if id := logging.RequestID(request.In.Context()); id != "" {
+					request.Out.Header.Set("X-Request-ID", id)
+				}
 			},
 			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 				status := http.StatusBadGateway
@@ -72,4 +90,25 @@ func NewHandler(cfg config.Config, transport http.RoundTripper) (http.Handler, e
 	})
 
 	return mux, nil
+}
+
+type observedTransport struct {
+	service string
+	next    http.RoundTripper
+	metrics *observability.Metrics
+}
+
+func (t *observedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	start := time.Now()
+	response, err := t.next.RoundTrip(request)
+	duration := time.Since(start)
+	status := 0
+	if response != nil {
+		status = response.StatusCode
+	}
+	logging.RecordUpstream(request.Context(), t.service, duration, status, err != nil)
+	if t.metrics != nil {
+		t.metrics.Observe(t.service, duration, status, err)
+	}
+	return response, err
 }
