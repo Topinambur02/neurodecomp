@@ -16,6 +16,7 @@ import (
 	"github.com/topinambur02/apigateway/internal/config"
 	"github.com/topinambur02/apigateway/internal/handler"
 	"github.com/topinambur02/apigateway/internal/logging"
+	"github.com/topinambur02/apigateway/internal/observability"
 	"github.com/topinambur02/apigateway/internal/ratelimit"
 	"github.com/topinambur02/apigateway/pkg/shutdown"
 )
@@ -53,6 +54,8 @@ func run() error {
 		return err
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -61,6 +64,7 @@ func run() error {
 	})
 
 	logger.Info("create and register handlers")
+	metrics := observability.NewMetrics()
 	transport, err := handler.NewTransport(cfg.Upstream)
 	if err != nil {
 		logger.WithError(err).Error("invalid upstream configuration")
@@ -68,11 +72,14 @@ func run() error {
 	}
 	defer transport.CloseIdleConnections()
 
-	rootMux, err := handler.NewHandler(cfg, transport)
+	rootMux, err := handler.NewHandlerWithMetrics(cfg, transport, metrics)
 
 	if err != nil {
 		logger.WithError(err).Error("failed to register handlers")
 		return err
+	}
+	for service := range cfg.Services {
+		metrics.InitService(service)
 	}
 
 	limitedHandler, err := ratelimit.New(cfg.RateLimit, rootMux)
@@ -81,7 +88,11 @@ func run() error {
 		return err
 	}
 
-	handlerWithCors := logging.Requests(logger, c.Handler(limitedHandler))
+	operationalMux := http.NewServeMux()
+	operationalMux.Handle("/ready", readinessHandler(ctx))
+	operationalMux.Handle("/metrics", metrics.Handler())
+	operationalMux.Handle("/", limitedHandler)
+	handlerWithCors := logging.Requests(logger, c.Handler(operationalMux), metrics)
 
 	server := &http.Server{
 		Addr:         addr,
@@ -91,9 +102,6 @@ func run() error {
 		WriteTimeout: time.Duration(cfg.WriteTimeoutSeconds) * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -112,4 +120,16 @@ func run() error {
 	}
 	logger.Info("server exiting")
 	return nil
+}
+
+func readinessHandler(ctx context.Context) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if ctx.Err() != nil {
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("ready\n"))
+	})
 }
