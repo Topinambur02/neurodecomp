@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 )
 
@@ -17,7 +17,7 @@ type Config struct {
 	Services map[string]Service `json:"services"`
 }
 
-func LoadConfig(path string) Config {
+func LoadConfig(path string) (Config, error) {
 	config := Config{
 		Port:     8080,
 		Host:     "localhost",
@@ -26,15 +26,15 @@ func LoadConfig(path string) Config {
 	configFile, err := os.Open(path)
 
 	if err != nil {
-		log.Fatal(err)
+		return Config{}, fmt.Errorf("open config %q: %w", path, err)
 	}
 
 	defer configFile.Close()
 
 	jsonParser := json.NewDecoder(configFile)
 	if err := jsonParser.Decode(&config); err != nil {
-		log.Fatalf("decode config %q: %v", path, err)
+		return Config{}, fmt.Errorf("decode config %q: %w", path, err)
 	}
 
-	return config
+	return config, nil
 }
