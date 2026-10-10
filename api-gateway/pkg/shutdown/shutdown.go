@@ -1,25 +1,36 @@
 package shutdown
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/signal"
+	"net/http"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
-func Graceful(logger *logrus.Entry, signals []os.Signal, closeItems ...io.Closer) error {
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, signals...)
-	defer signal.Stop(sigc)
-	sig := <-sigc
-	logger.WithField("signal", sig.String()).Info("shutdown signal received")
+func Graceful(ctx context.Context, logger *logrus.Entry, server *http.Server, serveErr <-chan error, timeout time.Duration) error {
+	select {
+	case <-ctx.Done():
+		logger.Info("shutdown signal received")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
 
-	for _, closer := range closeItems {
-		if err := closer.Close(); err != nil {
-			return fmt.Errorf("close %T: %w", closer, err)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			_ = server.Close()
+			return fmt.Errorf("shutdown HTTP server: %w", err)
 		}
+	case err := <-serveErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			_ = server.Close()
+			return fmt.Errorf("serve HTTP: %w", err)
+		}
+		return nil
+	}
+
+	if err := <-serveErr; !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("serve HTTP after shutdown: %w", err)
 	}
 	return nil
 }
