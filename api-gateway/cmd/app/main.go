@@ -13,6 +13,7 @@ import (
 	"github.com/topinambur02/apigateway/internal/config"
 	"github.com/topinambur02/apigateway/internal/handler"
 	"github.com/topinambur02/apigateway/internal/logging"
+	"github.com/topinambur02/apigateway/internal/ratelimit"
 	"github.com/topinambur02/apigateway/pkg/shutdown"
 )
 
@@ -58,7 +59,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	handlerWithCors := logging.Requests(logger, c.Handler(rootMux))
+	limitedHandler, err := ratelimit.New(cfg.RateLimit, rootMux)
+	if err != nil {
+		logger.WithError(err).Error("invalid rate limit configuration")
+		os.Exit(1)
+	}
+
+	handlerWithCors := logging.Requests(logger, c.Handler(limitedHandler))
 
 	server := &http.Server{
 		Addr:         addr,

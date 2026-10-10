@@ -1,6 +1,10 @@
 {
     "port": PORT,
     "host": "HOST",
+    "rate_limit": {
+        "requests_per_second": 10,
+        "burst": 20
+    },
     "services": {
         "example": {
             "host": "EXAMPLE_HOST",
