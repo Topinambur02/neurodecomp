@@ -22,9 +22,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to initialize logging: %v\n", err)
 		os.Exit(1)
 	}
-	defer logFile.Close()
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close log file: %v\n", err)
+		}
+	}()
 	standardLogWriter := logger.WriterLevel(logrus.ErrorLevel)
-	defer standardLogWriter.Close()
+	defer func() {
+		if err := standardLogWriter.Close(); err != nil {
+			logger.WithError(err).Warn("failed to close standard log writer")
+		}
+	}()
 	log.SetOutput(standardLogWriter)
 	log.SetFlags(0)
 
