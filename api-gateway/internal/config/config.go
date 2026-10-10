@@ -7,32 +7,34 @@ import (
 )
 
 type Service struct {
-	Host 	string	`json:"host"`
-	Port 	int		`json:"port"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
 }
 
 type Config struct {
-	Port    	int					`json:"port"`
-	Host		string				`json:"host"`
-	Services 	map[string]Service	`json:"services"`
+	Port     int                `json:"port"`
+	Host     string             `json:"host"`
+	Services map[string]Service `json:"services"`
 }
 
 func LoadConfig(path string) Config {
 	config := Config{
-		Port: 8080, 
-		Host: "localhost",
+		Port:     8080,
+		Host:     "localhost",
 		Services: map[string]Service{},
 	}
- 	configFile, err := os.Open(path)
+	configFile, err := os.Open(path)
 
 	if err != nil {
-  		log.Fatal(err)
- 	}
+		log.Fatal(err)
+	}
 
 	defer configFile.Close()
-	
- 	jsonParser := json.NewDecoder(configFile)
- 	jsonParser.Decode(&config)
+
+	jsonParser := json.NewDecoder(configFile)
+	if err := jsonParser.Decode(&config); err != nil {
+		log.Fatalf("decode config %q: %v", path, err)
+	}
 
 	return config
 }
