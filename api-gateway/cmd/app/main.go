@@ -9,15 +9,32 @@ import (
 	"time"
 
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 	"github.com/topinambur02/apigateway/internal/config"
 	"github.com/topinambur02/apigateway/internal/handler"
+	"github.com/topinambur02/apigateway/internal/logging"
 	"github.com/topinambur02/apigateway/pkg/shutdown"
 )
 
 func main() {
-	log.Println("config initializing")
-	config := config.LoadConfig("config.json")
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	logger, logFile, err := logging.New("logs/all.log")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logging: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+	standardLogWriter := logger.WriterLevel(logrus.ErrorLevel)
+	defer standardLogWriter.Close()
+	log.SetOutput(standardLogWriter)
+	log.SetFlags(0)
+
+	logger.Info("config initializing")
+	cfg, err := config.LoadConfig("config.json")
+	if err != nil {
+		logger.WithError(err).Error("failed to load config")
+		os.Exit(1)
+	}
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -25,31 +42,37 @@ func main() {
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	})
 
-	log.Println("create and register handlers")
-	rootMux, err := handler.NewHandler(config, nil)
+	logger.Info("create and register handlers")
+	rootMux, err := handler.NewHandler(cfg, nil)
 
 	if err != nil {
-		log.Fatal(err)
+		logger.WithError(err).Error("failed to register handlers")
+		os.Exit(1)
 	}
 
-	handlerWithCors := c.Handler(rootMux)
+	handlerWithCors := logging.Requests(logger, c.Handler(rootMux))
 
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      handlerWithCors,
+		ErrorLog:     log.New(standardLogWriter, "", 0),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
-		log.Println("Gateway launched on", config.Port)
+		logger.WithField("address", addr).Info("gateway starting")
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			logger.WithError(err).Error("gateway server failed")
+			os.Exit(1)
 		}
 	}()
 
-	shutdown.Graceful([]os.Signal{syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM}, server)
-	log.Println("Server exiting")
+	if err := shutdown.Graceful(logger, []os.Signal{syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM}, server); err != nil {
+		logger.WithError(err).Error("shutdown failed")
+		os.Exit(1)
+	}
+	logger.Info("server exiting")
 }
