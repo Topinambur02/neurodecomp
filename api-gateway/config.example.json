@@ -1,0 +1,10 @@
+{
+    "port": PORT,
+    "host": "HOST",
+    "services": {
+        "example": {
+            "host": "EXAMPLE_HOST",
+            "port": EXAMPLE_PORT
+        }
+    }
+}
