@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -34,6 +37,15 @@ func NewHandler(cfg config.Config, transport http.RoundTripper) (http.Handler, e
 			Rewrite: func(request *httputil.ProxyRequest) {
 				request.SetURL(target)
 				request.SetXForwarded()
+			},
+			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+				status := http.StatusBadGateway
+				var netErr net.Error
+				if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+					status = http.StatusGatewayTimeout
+				}
+				log.Printf("upstream %q request failed: %v", name, err)
+				http.Error(w, http.StatusText(status), status)
 			},
 		}
 		routes[name] = http.StripPrefix("/api/"+name, proxy)
