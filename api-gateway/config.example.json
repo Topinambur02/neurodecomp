@@ -1,14 +1,21 @@
 {
-    "port": PORT,
-    "host": "HOST",
+    "port": 8080,
+    "host": "localhost",
+    "write_timeout_seconds": 30,
+    "upstream": {
+        "dial_timeout_seconds": 3,
+        "response_header_timeout_seconds": 10,
+        "max_connections_per_host": 100,
+        "max_idle_connections_per_host": 20
+    },
     "rate_limit": {
         "requests_per_second": 10,
         "burst": 20
     },
     "services": {
         "example": {
-            "host": "EXAMPLE_HOST",
-            "port": EXAMPLE_PORT
+            "host": "localhost",
+            "port": 9000
         }
     }
 }

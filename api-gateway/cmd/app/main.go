@@ -61,7 +61,14 @@ func run() error {
 	})
 
 	logger.Info("create and register handlers")
-	rootMux, err := handler.NewHandler(cfg, nil)
+	transport, err := handler.NewTransport(cfg.Upstream)
+	if err != nil {
+		logger.WithError(err).Error("invalid upstream configuration")
+		return err
+	}
+	defer transport.CloseIdleConnections()
+
+	rootMux, err := handler.NewHandler(cfg, transport)
 
 	if err != nil {
 		logger.WithError(err).Error("failed to register handlers")
@@ -81,7 +88,7 @@ func run() error {
 		Handler:      handlerWithCors,
 		ErrorLog:     log.New(standardLogWriter, "", 0),
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeoutSeconds) * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
