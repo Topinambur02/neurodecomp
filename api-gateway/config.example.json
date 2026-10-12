@@ -1,6 +1,7 @@
 {
     "port": 8080,
-    "host": "localhost",
+    "host": "127.0.0.1",
+    "external_scheme": "http",
     "write_timeout_seconds": 30,
     "upstream": {
         "dial_timeout_seconds": 3,
@@ -12,9 +13,14 @@
         "requests_per_second": 10,
         "burst": 20
     },
+    "cors": {
+        "allowed_origins": ["http://localhost:3000"],
+        "allowed_methods": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+        "allowed_headers": ["Content-Type", "Authorization"]
+    },
     "services": {
         "example": {
-            "host": "localhost",
+            "host": "127.0.0.1",
             "port": 9000
         }
     }
