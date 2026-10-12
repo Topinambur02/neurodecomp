@@ -51,6 +51,9 @@ func newHandler(cfg config.Config, transport http.RoundTripper, metrics *observa
 			Rewrite: func(request *httputil.ProxyRequest) {
 				request.SetURL(target)
 				request.SetXForwarded()
+				if cfg.ExternalScheme != "" {
+					request.Out.Header.Set("X-Forwarded-Proto", cfg.ExternalScheme)
+				}
 				request.Out.Header.Del("X-Request-ID")
 				if id := logging.RequestID(request.In.Context()); id != "" {
 					request.Out.Header.Set("X-Request-ID", id)

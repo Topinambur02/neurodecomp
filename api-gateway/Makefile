@@ -4,8 +4,10 @@ ifeq ($(GO_BIN),)
 GO_BIN := $(firstword $(subst :, ,$(shell go env GOPATH)))/bin
 endif
 LINTER := $(GO_BIN)/golangci-lint
+DEV_CONFIG ?= configs/config.dev.json
+PROD_CONFIG ?= configs/config.prod.json
 
-.PHONY: install lint fmt
+.PHONY: install lint fmt run-dev run-prod
 
 install:
 	@$(LINTER) version 2>/dev/null | grep -q "version $(GOLANGCI_LINT_VERSION) " || \
@@ -16,3 +18,9 @@ lint: install
 
 fmt: install
 	$(LINTER) fmt ./...
+
+run-dev:
+	GATEWAY_CONFIG="$(DEV_CONFIG)" go run ./cmd/app
+
+run-prod:
+	GATEWAY_CONFIG="$(PROD_CONFIG)" go run ./cmd/app

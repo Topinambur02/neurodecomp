@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
 	"github.com/topinambur02/apigateway/internal/config"
 	"github.com/topinambur02/apigateway/internal/handler"
@@ -48,20 +48,18 @@ func run() error {
 	log.SetFlags(0)
 
 	logger.Info("config initializing")
-	cfg, err := config.LoadConfig("config.json")
+	configPath := os.Getenv("GATEWAY_CONFIG")
+	if configPath == "" {
+		configPath = "config.json"
+	}
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		logger.WithError(err).Error("failed to load config")
 		return err
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGABRT, syscall.SIGQUIT, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type", "Authorization"},
-	})
 
 	logger.Info("create and register handlers")
 	metrics := observability.NewMetrics()
@@ -92,7 +90,7 @@ func run() error {
 	operationalMux.Handle("/ready", readinessHandler(ctx))
 	operationalMux.Handle("/metrics", metrics.Handler())
 	operationalMux.Handle("/", limitedHandler)
-	handlerWithCors := logging.Requests(logger, c.Handler(operationalMux), metrics)
+	handlerWithCors := logging.Requests(logger, cfg.CORS.Handler(operationalMux), metrics)
 
 	server := &http.Server{
 		Addr:         addr,
