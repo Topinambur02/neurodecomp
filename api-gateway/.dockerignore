@@ -1,0 +1,7 @@
+.git
+logs
+configs/*
+!configs/config.prod.json
+.env
+*.test
+*.out
