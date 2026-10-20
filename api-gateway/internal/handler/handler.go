@@ -51,6 +51,14 @@ func newHandler(cfg config.Config, transport http.RoundTripper, metrics *observa
 			Rewrite: func(request *httputil.ProxyRequest) {
 				request.SetURL(target)
 				request.SetXForwarded()
+				// Only the forwarded JWT establishes identity. Never forward identity
+				// headers supplied by an external caller as trusted user information.
+				for header := range request.Out.Header {
+					lower := strings.ToLower(header)
+					if strings.HasPrefix(lower, "x-user-") || strings.HasPrefix(lower, "x-auth-request-") || strings.HasPrefix(lower, "x-authenticated-") {
+						request.Out.Header.Del(header)
+					}
+				}
 				if cfg.ExternalScheme != "" {
 					request.Out.Header.Set("X-Forwarded-Proto", cfg.ExternalScheme)
 				}

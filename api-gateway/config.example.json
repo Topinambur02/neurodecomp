@@ -2,6 +2,13 @@
     "port": 8080,
     "host": "127.0.0.1",
     "external_scheme": "http",
+    "auth": {
+        "issuer_url": "http://localhost:8081/realms/neurodecomp",
+        "jwks_url": "http://localhost:8081/realms/neurodecomp/protocol/openid-connect/certs",
+        "audience": "neurodecomp-api",
+        "required_roles": ["user", "admin"],
+        "allow_insecure_http": true
+    },
     "write_timeout_seconds": 30,
     "upstream": {
         "dial_timeout_seconds": 3,

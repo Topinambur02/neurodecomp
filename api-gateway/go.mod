@@ -3,6 +3,8 @@ module github.com/topinambur02/apigateway
 go 1.26.5
 
 require (
+	github.com/coreos/go-oidc/v3 v3.17.0
+	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rs/cors v1.11.1
 	github.com/sirupsen/logrus v1.9.4
@@ -15,6 +17,7 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )

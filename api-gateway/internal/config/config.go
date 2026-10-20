@@ -48,6 +48,7 @@ type Config struct {
 	Upstream            Upstream           `json:"upstream"`
 	CORS                CORS               `json:"cors"`
 	WriteTimeoutSeconds int                `json:"write_timeout_seconds"`
+	Auth                Auth               `json:"auth"`
 }
 
 func LoadConfig(path string) (cfg Config, err error) {
@@ -86,6 +87,9 @@ func LoadConfig(path string) (cfg Config, err error) {
 		}
 		return Config{}, fmt.Errorf("decode config %q: %w", path, err)
 	}
+	if err := cfg.applyEnvironment(); err != nil {
+		return Config{}, fmt.Errorf("config environment: %w", err)
+	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("validate config %q: %w", path, err)
 	}
@@ -93,6 +97,9 @@ func LoadConfig(path string) (cfg Config, err error) {
 }
 
 func (cfg Config) Validate() error {
+	if err := cfg.Auth.Validate(); err != nil {
+		return fmt.Errorf("auth: %w", err)
+	}
 	if !validHost(cfg.Host) {
 		return fmt.Errorf("host must be an IP address or DNS name")
 	}
