@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/topinambur02/apigateway/internal/auth"
 	"github.com/topinambur02/apigateway/internal/config"
 	"github.com/topinambur02/apigateway/internal/handler"
 	"github.com/topinambur02/apigateway/internal/logging"
@@ -80,7 +81,15 @@ func run() error {
 		metrics.InitService(service)
 	}
 
-	limitedHandler, err := ratelimit.New(cfg.RateLimit, rootMux)
+	authenticator, err := auth.New(ctx, cfg.Auth)
+	if err != nil {
+		logger.WithError(err).Error("failed to initialize authentication")
+		return err
+	}
+	applicationMux := http.NewServeMux()
+	applicationMux.Handle("/api/", authenticator.Require(rootMux))
+	applicationMux.Handle("/", rootMux)
+	limitedHandler, err := ratelimit.New(cfg.RateLimit, applicationMux)
 	if err != nil {
 		logger.WithError(err).Error("invalid rate limit configuration")
 		return err
@@ -88,7 +97,7 @@ func run() error {
 
 	operationalMux := http.NewServeMux()
 	operationalMux.Handle("/ready", readinessHandler(ctx))
-	operationalMux.Handle("/metrics", metrics.Handler())
+	operationalMux.Handle("/metrics", authenticator.Require(metrics.Handler(), "admin"))
 	operationalMux.Handle("/", limitedHandler)
 	handlerWithCors := logging.Requests(logger, cfg.CORS.Handler(operationalMux), metrics)
 

@@ -1,0 +1,3 @@
+/envs/*
+.DS_Store
+!/.env-*.example

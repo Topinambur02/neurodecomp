@@ -1,0 +1,83 @@
+{
+  "realm": "neurodecomp",
+  "enabled": true,
+  "displayName": "Neurodecomp",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "defaultSignatureAlgorithm": "RS256",
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-neurodecomp",
+        "description": "Default roles for new users",
+        "composite": true,
+        "composites": {"client": {"neurodecomp-api": ["user"]}}
+      }
+    ],
+    "client": {
+      "neurodecomp-api": [
+        {"name": "user", "description": "Use the decompilation API"},
+        {"name": "admin", "description": "Application administration and gateway metrics"}
+      ]
+    }
+  },
+  "defaultRole": {"name": "default-roles-neurodecomp"},
+  "clients": [
+    {
+      "clientId": "neurodecomp-api",
+      "name": "Neurodecomp API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "neurodecomp-web",
+      "name": "Neurodecomp browser application",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["http://localhost:3000/auth/callback"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "neurodecomp-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "neurodecomp-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clientScopeMappings": {
+    "neurodecomp-api": [
+      {"client": "neurodecomp-web", "roles": ["user", "admin"]}
+    ]
+  }
+}

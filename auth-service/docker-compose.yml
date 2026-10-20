@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:17.7-alpine
+    env_file:
+      - path: ./envs/.env-db
+        required: true
+    environment:
+      DB_PORT: ${DB_PORT:?Set DB_PORT in .env}
+      HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:?Set HEALTHCHECK_HOST in .env}
+    command:
+      - postgres
+      - -h
+      - ${DB_LISTEN_HOST:?Set DB_LISTEN_HOST in .env}
+      - -p
+      - ${DB_PORT:?Set DB_PORT in .env}
+    volumes:
+      - keycloak-db:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - ${DB_HOST:?Set DB_HOST in .env}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -h "$${HEALTHCHECK_HOST}" -p "$${DB_PORT}" -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped

@@ -33,4 +33,5 @@ go.work.sum
 
 logs
 .DS_Store
-configs
+configs/config.dev.json
+configs/config.prod.json
